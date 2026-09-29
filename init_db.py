@@ -10,6 +10,14 @@ CREATE TABLE IF NOT EXISTS recipes (
     instructions TEXT NOT NULL DEFAULT '',
     is_public INTEGER NOT NULL DEFAULT 1
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL,
+    display_name TEXT UNIQUE,
+    password_hash TEXT NOT NULL
+);
 """
 
 SEED = [
