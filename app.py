@@ -9,6 +9,8 @@ import sqlite3
 
 from flask import Flask, g, jsonify, request
 
+from werkzeug.security import generate_password_hash, check_password_hash
+
 DATABASE = "recipes.db"
 
 app = Flask(__name__)
@@ -128,5 +130,70 @@ def delete_recipe(recipe_id):
     return "", 204
 
 
+@app.post("/register")
+def register():
+    data = request.get_json(silent=True)
+
+    # 1️⃣ Validate required fields
+    username = (data or {}).get("username")
+    email = (data or {}).get("email")
+    password = (data or {}).get("password")
+    display_name = (data or {}).get("display_name")
+
+    if not data or not username or not email or not password:
+        return jsonify({"error": "username, email, and password are required"}), 400
+
+    # 2️⃣ Hash the password
+    password_hash = hash_password(password)
+
+    # 3️⃣ Insert into users table with parameterized query
+    db = get_db()
+    try:
+        cur = db.execute(
+            """
+            INSERT INTO users (username, email, display_name, password_hash)
+            VALUES (?, ?, ?, ?)
+            """,
+            (username, email, display_name, password_hash),
+        )
+        db.commit()
+    except sqlite3.IntegrityError:
+        # username or display_name conflict
+        return jsonify({"error": "username or display_name already exists"}), 409
+
+    # 4️⃣ Fetch the new user (without password fields) and return 201
+    row = db.execute(
+        "SELECT id, username, email, display_name FROM users WHERE id = ?",
+        (cur.lastrowid,),
+    ).fetchone()
+
+    return (
+        jsonify(
+            {
+                "id": row["id"],
+                "username": row["username"],
+                "email": row["email"],
+                "display_name": row["display_name"],
+            }
+        ),
+        201,
+    )
+
+def hash_password(plaintext_password: str) -> str:
+    """Return a one-way hash of the given plaintext password."""
+    return generate_password_hash(plaintext_password)
+
+
+def verify_password(stored_hash: str, candidate_password: str) -> bool:
+    """Check whether the candidate password matches the stored hash."""
+    return check_password_hash(stored_hash, candidate_password)
+
+
 if __name__ == "__main__":
+    # Temporary test of password hashing
+    test_hash = hash_password("test-password-123")
+    print("HASH:", test_hash)
+    print("correct?", verify_password(test_hash, "test-password-123"))
+    print("wrong?  ", verify_password(test_hash, "not-the-password"))
+
     app.run(debug=True)
