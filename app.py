@@ -188,6 +188,44 @@ def verify_password(stored_hash: str, candidate_password: str) -> bool:
     """Check whether the candidate password matches the stored hash."""
     return check_password_hash(stored_hash, candidate_password)
 
+@app.post("/login")
+def login():
+    data = request.get_json(silent=True)
+
+    username = (data or {}).get("username")
+    password = (data or {}).get("password")
+
+    if not data or not username or not password:
+        return jsonify({"error": "username and password are required"}), 400
+
+    db = get_db()
+    row = db.execute(
+        "SELECT id, username, email, display_name, password_hash FROM users WHERE username = ?",
+        (username,),
+    ).fetchone()
+
+    # Generic auth failure (same message for "no such user" and "wrong password")
+    generic_error = jsonify({"error": "invalid username or password"})
+
+    if row is None:
+        return generic_error, 401
+
+    if not verify_password(row["password_hash"], password):
+        return generic_error, 401
+
+    # Success: return authenticated identity (no password/hash)
+    return (
+        jsonify(
+            {
+                "id": row["id"],
+                "username": row["username"],
+                "email": row["email"],
+                "display_name": row["display_name"],
+            }
+        ),
+        200,
+    )
+
 
 if __name__ == "__main__":
     # Temporary test of password hashing
