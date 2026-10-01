@@ -9,7 +9,18 @@ import sqlite3
 
 from flask import Flask, g, jsonify, request
 
+import os
+import datetime
+import jwt  # PyJWT
+from dotenv import load_dotenv
+
 from werkzeug.security import generate_password_hash, check_password_hash
+
+load_dotenv()
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY is not set in the environment")
 
 DATABASE = "recipes.db"
 
@@ -214,18 +225,33 @@ def login():
         return generic_error, 401
 
     # Success: return authenticated identity (no password/hash)
+    # Success: build identity payload (non-secret claims)
+    user_payload = {
+        "id": row["id"],
+        "username": row["username"],
+        "email": row["email"],
+        "display_name": row["display_name"],
+    }
+
+    # Add JWT claims: identity + expiry
+    now = datetime.datetime.utcnow()
+    token_claims = {
+        "sub": row["id"],          # subject: user id
+        "username": row["username"],
+        "exp": now + datetime.timedelta(hours=1),
+    }
+
+    token = jwt.encode(token_claims, JWT_SECRET_KEY, algorithm="HS256")
+
     return (
         jsonify(
             {
-                "id": row["id"],
-                "username": row["username"],
-                "email": row["email"],
-                "display_name": row["display_name"],
+                "user": user_payload,
+                "token": token,
             }
         ),
         200,
     )
-
 
 if __name__ == "__main__":
     # Temporary test of password hashing
